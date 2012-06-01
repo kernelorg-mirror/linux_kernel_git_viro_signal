@@ -243,6 +243,25 @@ static int copy_sc_from_user(struct pt_regs *regs,
 	return 0;
 }
 
+static long do_sigreturn(struct sigcontext __user *sc, sigset_t *set)
+{
+	if (!set)
+		goto segfault;
+
+	set_current_blocked(set);
+
+	if (copy_sc_from_user(&current->thread.regs, sc))
+		goto segfault;
+
+	/* Avoid ERESTART handling */
+	PT_REGS_SYSCALL_NR(&current->thread.regs) = -1;
+	return PT_REGS_SYSCALL_RET(&current->thread.regs);
+
+ segfault:
+	force_sig(SIGSEGV, current);
+	return 0;
+}
+
 static int copy_sc_to_user(struct sigcontext __user *to,
 			   struct _fpstate __user *to_fp, struct pt_regs *regs,
 			   unsigned long mask)
@@ -468,28 +487,17 @@ long sys_sigreturn(void)
 {
 	unsigned long sp = PT_REGS_SP(&current->thread.regs);
 	struct sigframe __user *frame = (struct sigframe __user *)(sp - 8);
-	sigset_t set;
+	sigset_t set, *p = &set;
 	struct sigcontext __user *sc = &frame->sc;
 	unsigned long __user *oldmask = &sc->oldmask;
 	unsigned long __user *extramask = frame->extramask;
 	int sig_size = (_NSIG_WORDS - 1) * sizeof(unsigned long);
 
-	if (copy_from_user(&set.sig[0], oldmask, sizeof(set.sig[0])) ||
-	    copy_from_user(&set.sig[1], extramask, sig_size))
-		goto segfault;
+	if (copy_from_user(&p->sig[0], oldmask, sizeof(set.sig[0])) ||
+	    copy_from_user(&p->sig[1], extramask, sig_size))
+		p = NULL;
 
-	set_current_blocked(&set);
-
-	if (copy_sc_from_user(&current->thread.regs, sc))
-		goto segfault;
-
-	/* Avoid ERESTART handling */
-	PT_REGS_SYSCALL_NR(&current->thread.regs) = -1;
-	return PT_REGS_SYSCALL_RET(&current->thread.regs);
-
- segfault:
-	force_sig(SIGSEGV, current);
-	return 0;
+	return do_sigreturn(sc, p);
 }
 
 #else
@@ -583,21 +591,10 @@ long sys_rt_sigreturn(void)
 	struct rt_sigframe __user *frame =
 		(struct rt_sigframe __user *)(sp - sizeof(long));
 	struct ucontext __user *uc = &frame->uc;
-	sigset_t set;
+	sigset_t set, *p = &set;
 
-	if (copy_from_user(&set, &uc->uc_sigmask, sizeof(set)))
-		goto segfault;
+	if (copy_from_user(p, &uc->uc_sigmask, sizeof(set)))
+		p = NULL;
 
-	set_current_blocked(&set);
-
-	if (copy_sc_from_user(&current->thread.regs, &uc->uc_mcontext))
-		goto segfault;
-
-	/* Avoid ERESTART handling */
-	PT_REGS_SYSCALL_NR(&current->thread.regs) = -1;
-	return PT_REGS_SYSCALL_RET(&current->thread.regs);
-
- segfault:
-	force_sig(SIGSEGV, current);
-	return 0;
+	return do_sigreturn(&uc->uc_mcontext, p);
 }
