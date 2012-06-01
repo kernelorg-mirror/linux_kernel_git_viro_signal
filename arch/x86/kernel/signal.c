@@ -733,7 +733,7 @@ static void do_signal(struct pt_regs *regs)
  * - triggered by the TIF_WORK_MASK flags
  */
 void
-do_notify_resume(struct pt_regs *regs, void *unused, __u32 thread_info_flags)
+do_notify_resume(struct pt_regs *regs, __u32 thread_info_flags)
 {
 	user_exit();
 

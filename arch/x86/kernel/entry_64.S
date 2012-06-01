@@ -817,7 +817,7 @@ int_signal:
 	testl $_TIF_DO_NOTIFY_MASK,%edx
 	jz 1f
 	movq %rsp,%rdi		# &ptregs -> arg1
-	xorl %esi,%esi		# oldset -> arg2
+	movl %edx,%esi		# thread_flags -> arg2
 	call do_notify_resume
 1:	movl $_TIF_WORK_MASK,%edi
 int_restore_rest:
@@ -1105,7 +1105,7 @@ retint_signal:
 	ENABLE_INTERRUPTS(CLBR_NONE)
 	SAVE_REST
 	movq $-1,ORIG_RAX(%rsp)
-	xorl %esi,%esi		# oldset
+	movl %edx,%esi		# thread_flags
 	movq %rsp,%rdi		# &pt_regs
 	call do_notify_resume
 	RESTORE_REST
@@ -1519,10 +1519,9 @@ paranoid_userspace:
 	movq %rax,%rsp			/* switch stack for scheduling */
 	testl $_TIF_NEED_RESCHED,%ebx
 	jnz paranoid_schedule
-	movl %ebx,%edx			/* arg3: thread flags */
+	movl %ebx,%esi			/* arg2: thread flags */
 	TRACE_IRQS_ON
 	ENABLE_INTERRUPTS(CLBR_NONE)
-	xorl %esi,%esi 			/* arg2: oldset */
 	movq %rsp,%rdi 			/* arg1: &pt_regs */
 	call do_notify_resume
 	DISABLE_INTERRUPTS(CLBR_NONE)

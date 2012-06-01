@@ -640,7 +640,7 @@ work_notifysig:				# deal with pending signals and
 	andb $SEGMENT_RPL_MASK, %bl
 	cmpb $USER_RPL, %bl
 	jb resume_kernel
-	xorl %edx, %edx
+	movl %ecx, %edx
 	call do_notify_resume
 	jmp resume_userspace
 
